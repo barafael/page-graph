@@ -1,4 +1,4 @@
-pub (super) fn get_urls<'a>() -> Vec<&'a str> {
+pub fn traplinked_sub_urls<'a>() -> Vec<&'a str> {
     vec![
         "cart",
         "checkout",

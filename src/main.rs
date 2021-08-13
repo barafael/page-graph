@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::copy;
 
@@ -8,33 +9,45 @@ mod urls;
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     lazy_static! {
-        static ref RE: Regex =
-            Regex::new(r###"((http)s?:\\/\\/www.traplinked.com\\/([^\\/]+))?"###).unwrap();
+    static ref FILTER_TRAPL_URLS: Regex =
+        //Regex::new(r###"((http)s?:\\/\\/www.traplinked.com\\/([^\\/]+))?"###).unwrap();
+        Regex::new(r###".*traplinked.*"###).unwrap();
     }
 
-    let _base_url = "https://www.traplinked.com/";
+    // Read all files in some subdir.
+    let paths = fs::read_dir("./pages").unwrap().map(|p| p.unwrap().path());
 
-    let paths = fs::read_dir("./pages").unwrap();
+    let mut map = HashMap::new();
 
-    let paths = paths.map(|p| p.unwrap().path());
-
+    // Crawl html files.
     for path in paths {
-        let file = fs::read_to_string(path).unwrap();
+        let file = fs::read_to_string(&path).unwrap();
         let urls = get_links_from(&file);
 
-        for url in urls {
-            let x = RE
-                .captures_iter(url)
-                .map(|c| c.get(0).unwrap())
-                .map(|m| m.as_str());
-            dbg!(&x);
-        }
+        let key = path.file_name().unwrap().to_str().unwrap().to_string();
+
+        // Filter on the results, again.
+        let urls = filter_regex(&urls, &FILTER_TRAPL_URLS);
+
+        map.insert(key, urls);
     }
+
+    dbg!(map);
 
     Ok(())
 }
 
-pub fn get_links_from(text: &str) -> Vec<&str> {
+/// Make a new vec which only contains the Strings which match the regex.
+pub fn filter_regex(results: &[String], regex: &Regex) -> Vec<String> {
+    results
+        .iter()
+        .filter(|s| regex.is_match(s))
+        .cloned()
+        .collect()
+}
+
+/// Make a vec with the links from the given html.
+pub fn get_links_from(text: &str) -> Vec<String> {
     lazy_static! {
         static ref RE: Regex =
             Regex::new(r###"<a[^>]*?href\s*=\s*['|"]([^#\\/].*?)['|"][^>]*?>"###).unwrap();
@@ -42,11 +55,12 @@ pub fn get_links_from(text: &str) -> Vec<&str> {
 
     RE.captures_iter(text)
         .map(|c| c.get(1).unwrap())
-        .map(|m| m.as_str())
+        .map(|m| m.as_str().to_string())
         .collect()
 }
 
-async fn get_traplinked_pages(base_url: &str, urls: &[&str]) -> Result<(), anyhow::Error> {
+/// Download the pages at base_url/{urls}.
+pub async fn get_pages(base_url: &str, urls: &[&str]) -> Result<(), anyhow::Error> {
     for url in urls {
         let fname = url.to_string();
         let url = format!("{}{}", base_url, url);
