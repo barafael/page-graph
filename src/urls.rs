@@ -1,3 +1,4 @@
+#[allow(unused)]
 pub fn traplinked_sub_urls<'a>() -> Vec<&'a str> {
     vec![
         "cart",
