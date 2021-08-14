@@ -1,12 +1,19 @@
+use anyhow::Context;
+
 use lazy_static::lazy_static;
+
 use petgraph::dot::{Config, Dot};
 use petgraph::graphmap::GraphMap;
 use petgraph::*;
+
 use regex::Regex;
 
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::copy;
+use std::io::{copy};
+use std::path::PathBuf;
+
+use structopt::StructOpt;
 
 mod urls;
 
@@ -26,10 +33,28 @@ static ref FILTER_TRAPL_URLS: Regex =
     Regex::new(r###".*traplinked.*"###).unwrap();
 }
 
+#[derive(Debug, StructOpt)]
+#[structopt(name = "basic")]
+struct Opt {
+    /// Output file
+    #[structopt(short = "d", long, parse(from_os_str))]
+    directory: PathBuf,
+
+    /// Output file, default to stdout.
+    #[structopt(short = "o", long, parse(from_os_str))]
+    output: Option<PathBuf>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    let opt = Opt::from_args();
+
+    if !opt.directory.is_dir() {
+        anyhow::bail!(format!("{} is not a directory", opt.directory.display()));
+    }
+
     // Read all files in some subdir.
-    let paths = fs::read_dir("./pages").unwrap().map(|p| p.unwrap().path());
+    let paths = fs::read_dir(opt.directory).unwrap().map(|p| p.unwrap().path());
 
     let mut map = HashMap::new();
 
@@ -48,7 +73,7 @@ async fn main() -> Result<(), anyhow::Error> {
             .into_iter()
             .map(|u| filter_prefix(&u, &TRAPL_PREFIXES))
             .map(remove_trailing_slash)
-            .filter(|s| is_crawling_leftover(&s))
+            .filter(|s| is_crawling_leftover(s))
             .collect();
 
         map.insert(key, tags);
@@ -56,7 +81,18 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let graph = make_page_graph(&map);
 
-    println!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
+    let result = format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
+
+    if let Some(file) = opt.output {
+        if !file.exists() {
+            fs::write(&file, result).context(format!("Could not write to {}", file.display()))?;
+        } else {
+            anyhow::bail!("{} already exists", file.display());
+        }
+    } else {
+        println!("{}", result);
+    };
+
 
     Ok(())
 }
