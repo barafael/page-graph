@@ -68,7 +68,7 @@ pub fn make_page_graph(data: &HashMap<String, Vec<String>>) -> GraphMap<&str, &s
         graph.add_node(k.as_str());
         for value in values {
             graph.add_node(value.as_str());
-            graph.add_edge(value.as_str(), k.as_str(), "links");
+            graph.add_edge(k.as_str(), value.as_str(), "links");
         }
     }
     graph
@@ -186,5 +186,27 @@ mod test {
         assert!(!is_crawling_leftover(""));
         assert!(!is_crawling_leftover("mailto:lchereti"));
         assert!(is_crawling_leftover("/author/lchereti"));
+    }
+
+    #[test]
+    fn makes_graph_map() {
+        let mut data = HashMap::new();
+        data.insert("a".to_string(), vec!["b".to_string(), "c".to_string()]);
+        data.insert("b".to_string(), vec!["c".to_string()]);
+        data.insert("c".to_string(), vec![]);
+
+        let graph = make_page_graph(&data);
+
+        println!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
+
+        assert_eq!(graph.edge_count(), 3);
+        assert_eq!(graph.node_count(), 3);
+        assert!(graph.contains_node("a"));
+        assert!(graph.contains_node("b"));
+        assert!(graph.contains_node("c"));
+
+        assert!(graph.contains_edge("a", "b"));
+        assert!(graph.contains_edge("a", "c"));
+        assert!(graph.contains_edge("b", "c"));
     }
 }
