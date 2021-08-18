@@ -10,7 +10,7 @@ use regex::Regex;
 
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{copy};
+use std::io::copy;
 use std::path::PathBuf;
 
 use structopt::StructOpt;
@@ -28,15 +28,12 @@ lazy_static! {
 }
 
 lazy_static! {
-static ref FILTER_TRAPL_URLS: Regex =
-    //Regex::new(r###"((http)s?:\\/\\/www.traplinked.com\\/([^\\/]+))?"###).unwrap();
-    Regex::new(r###".*traplinked.*"###).unwrap();
+    static ref FILTER_TRAPL_URLS: Regex = Regex::new(r###".*traplinked.*"###).unwrap();
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "basic")]
 struct Opt {
-    /// Output file
+    /// Directory with HTML files.
     #[structopt(short = "d", long, parse(from_os_str))]
     directory: PathBuf,
 
@@ -53,18 +50,21 @@ async fn main() -> Result<(), anyhow::Error> {
         anyhow::bail!(format!("{} is not a directory", opt.directory.display()));
     }
 
-    // Read all files in some subdir.
-    let paths = fs::read_dir(opt.directory).unwrap().map(|p| p.unwrap().path());
-
+    // Maps page names to URLs they link to.
     let mut map = HashMap::new();
+
+    // Read all files in given directory.
+    let paths = fs::read_dir(opt.directory)
+        .unwrap()
+        .map(|p| p.unwrap().path());
 
     // Crawl html files.
     for path in paths {
         let file = fs::read_to_string(&path).unwrap();
-        let urls = get_urls_from(&file);
-        let urls = filter_regex(&urls, &FILTER_TRAPL_URLS);
 
         let key = path.file_name().unwrap().to_str().unwrap().to_string();
+
+        let urls = get_urls_from(&file);
 
         // Filter out all non-traplinked urls
         let urls = filter_regex(&urls, &FILTER_TRAPL_URLS);
@@ -79,10 +79,13 @@ async fn main() -> Result<(), anyhow::Error> {
         map.insert(key, tags);
     }
 
+    // Make a petgraph `GraphMap` from the page name -> URLs map.
     let graph = make_page_graph(&map);
 
+    // Generate the output in dot format.
     let result = format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
 
+    // Save result to output file or write to stdout.
     if let Some(file) = opt.output {
         if !file.exists() {
             fs::write(&file, result).context(format!("Could not write to {}", file.display()))?;
@@ -92,7 +95,6 @@ async fn main() -> Result<(), anyhow::Error> {
     } else {
         println!("{}", result);
     };
-
 
     Ok(())
 }
@@ -110,7 +112,7 @@ pub fn make_page_graph(data: &HashMap<String, Vec<String>>) -> GraphMap<&str, &s
     graph
 }
 
-/// Make a new vec which only contains the Strings which match the regex.
+/// Make a new vec which only contains the Strings matching the regex.
 pub fn filter_regex(items: &[String], regex: &Regex) -> Vec<String> {
     items
         .iter()
@@ -119,10 +121,12 @@ pub fn filter_regex(items: &[String], regex: &Regex) -> Vec<String> {
         .collect()
 }
 
+/// Replace with empty string all matches of `regex` in `text`.
 pub fn filter_prefix(text: &str, regex: &Regex) -> String {
     regex.replace(text, "").to_string()
 }
 
+/// Remove the trailing slash of `text`, if applicable.
 pub fn remove_trailing_slash(mut text: String) -> String {
     if text.ends_with('/') {
         text.pop();
