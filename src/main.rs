@@ -41,6 +41,10 @@ struct Opt {
     /// Output file, default to stdout.
     #[structopt(short = "o", long, parse(from_os_str))]
     output: Option<PathBuf>,
+
+    /// Find orphans.
+    #[structopt(long)]
+    find_orphans: Option<bool>,
 }
 
 #[tokio::main]
@@ -100,9 +104,11 @@ async fn main() -> Result<(), anyhow::Error> {
         println!("{}", result);
     };
 
-    let orphans = find_orphans(&graph);
+    if let Some(true) = opt.find_orphans {
+        let orphans = find_orphans(&graph);
 
-    println!("orphan candidates: {:?}", orphans);
+        println!("orphan candidates: {:?}", orphans);
+    }
 
     Ok(())
 }
