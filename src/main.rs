@@ -6,9 +6,10 @@ use petgraph::dot::{Config, Dot};
 use petgraph::graphmap::GraphMap;
 use petgraph::*;
 
+use petgraph::visit::Dfs;
 use regex::Regex;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::copy;
 use std::path::PathBuf;
@@ -96,7 +97,27 @@ async fn main() -> Result<(), anyhow::Error> {
         println!("{}", result);
     };
 
+    let orphans = find_orphans(&graph);
+
+    println!("orphan candidates: {:?}", orphans);
+
     Ok(())
+}
+
+/// Find orphans in the given `graph`.
+pub fn find_orphans<'a>(graph: &'a GraphMap<&str, &str, Directed>) -> HashSet<&'a str> {
+    // A list of all pages.
+    let mut orphans: HashSet<&'a str> = graph.nodes().into_iter().collect();
+
+    // Attempt to visit all pages reachable from index.html.
+    let mut dfs = Dfs::new(&graph, "index");
+
+    while let Some(v) = dfs.next(&graph) {
+        // All visited pages are reachable, so not orphans.
+        orphans.remove(v);
+    }
+
+    orphans
 }
 
 pub fn make_page_graph(data: &HashMap<String, Vec<String>>) -> GraphMap<&str, &str, Directed> {
