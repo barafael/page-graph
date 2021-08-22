@@ -10,8 +10,8 @@ use petgraph::visit::Dfs;
 use regex::Regex;
 
 use std::collections::{HashMap, HashSet};
-use std::fs::{self, File};
-use std::io::copy;
+use std::fs::{self, File, OpenOptions};
+use std::io::{copy, Write};
 use std::path::PathBuf;
 
 use structopt::StructOpt;
@@ -87,13 +87,16 @@ async fn main() -> Result<(), anyhow::Error> {
     let result = format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
 
     // Save result to output file or write to stdout.
-    if let Some(file) = opt.output {
-        if !file.exists() {
-            fs::write(&file, result).context(format!("Could not write to {}", file.display()))?;
-        } else {
-            anyhow::bail!("{} already exists", file.display());
-        }
+    if let Some(path) = opt.output {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&path)
+            .context("Could not open output file for writing")?;
+        file.write(result.as_bytes())
+            .context(format!("Could not write to {}", path.display()))?;
     } else {
+        // print to stdout if no output file requested.
         println!("{}", result);
     };
 
